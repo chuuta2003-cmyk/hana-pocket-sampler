@@ -9,19 +9,29 @@
 <div class="settings"><label>録音音の鍵盤 <select id="root"><option value="48">C3</option><option value="60" selected>C4</option><option value="69">A4</option><option value="72">C5</option></select></label><label>音量 <input id="volume" type="range" min="0" max="100" value="80"></label><label><input id="loop" type="checkbox">ループ</label></div>
 <div class="diagnostics"><button id="preview" class="btn">▶ 録音音を試聴</button><button id="tone" class="btn">♪ 音声テスト</button></div></section>
 <section class="keyboard-shell"><div id="keys" class="keys" aria-label="C3からB4の2オクターブ鍵盤"></div></section>
-<p class="hint">白鍵14・黒鍵10の2オクターブ。指を離すと音が止まります。複数音同時演奏に対応。※音程は自動検出しません。元の音に対応する鍵盤を選んでください。</p><p class="hint">音が出ない場合は「♪ 音声テスト」→「▶ 録音音を試聴」の順で確認してください。録音データは端末内で処理されます。</p><footer class="footer">HANA instruments · Made for fun ♫　· 修正版 2.0</footer>
+<p class="hint">白鍵14・黒鍵10の2オクターブ。指を離すと音が止まります。複数音同時演奏に対応。※音程は自動検出しません。元の音に対応する鍵盤を選んでください。</p><p class="hint">音が出ない場合は「♪ 音声テスト」→「▶ 録音音を試聴」の順で確認してください。録音データは端末内で処理されます。</p><footer class="footer">HANA instruments · Made for fun ♫　· 修正版 2.1 · 音量＆左右出力改善</footer>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), keys=$('keys'), root=$('root'), volume=$('volume'), loop=$('loop');
 const status=$('status'), rec=$('rec'), stop=$('stop'), meter=$('meter'), clock=$('time');
 const msg=s=>{status.textContent=s};
-let ctx=null, buffer=null, recorder=null, stream=null, chunks=[], timer=null, timeout=null, began=0;
+let ctx=null, buffer=null, recorder=null, stream=null, chunks=[], timer=null, timeout=null, began=0, master=null;
 const voices=new Map(), pointers=new Map(), noteElements=new Map();
 const noteNames=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 const whiteOffsets=[0,2,4,5,7,9,11];
 const isWhite=n=>whiteOffsets.includes(n%12);
 function audio(){
- if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+ if(!ctx){
+  ctx=new (window.AudioContext||window.webkitAudioContext)();
+  // Polyphonic peak control; fixed stereo output even if microphone captured one side only.
+  const limiter=ctx.createDynamicsCompressor();
+  limiter.threshold.value=-9;limiter.knee.value=5;limiter.ratio.value=12;
+  limiter.attack.value=.003;limiter.release.value=.16;
+  const stereo=ctx.createChannelMerger(2);
+  limiter.connect(stereo,0,0);limiter.connect(stereo,0,1);
+  stereo.connect(ctx.destination);
+  master=limiter;
+ }
  if(ctx.state!=='running')ctx.resume().catch(e=>msg('音声を開始できません: '+e.message));
  return ctx;
 }
@@ -45,8 +55,8 @@ function play(id,n){
  const src=ac.createBufferSource(), gain=ac.createGain(), now=ac.currentTime;
  src.buffer=buffer;src.playbackRate.value=Math.pow(2,(n-Number(root.value))/12);
  src.loop=loop.checked;
- gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(Math.max(.0001,Number(volume.value)/100*.9),now+.01);
- src.connect(gain);gain.connect(ac.destination);
+ gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(Math.max(.0001,Number(volume.value)/100),now+.01);
+ src.connect(gain);gain.connect(master);
  const voice={src,gain,n,context:ac};voices.set(id,voice);highlight(n);
  src.onended=()=>{if(voices.get(id)===voice){voices.delete(id);highlight(n)}};
  src.start(now);
@@ -66,11 +76,32 @@ async function decode(blob){
  const ac=audio(), bytes=await blob.arrayBuffer();
  const decoded=await ac.decodeAudioData(bytes);
  if(!decoded.duration)throw Error('音声データが空です');
- buffer=decoded;clock.textContent=decoded.duration.toFixed(1)+' 秒';meter.style.width='100%';
- // 波形がすべて無音の場合も判別しておく
- const a=decoded.getChannelData(0);let peak=0;
- for(let i=0;i<a.length;i+=Math.max(1,Math.floor(a.length/50000)))peak=Math.max(peak,Math.abs(a[i]));
- msg('録音OK！ '+decoded.duration.toFixed(1)+'秒。'+(peak<.0003?'ただし音量がほぼゼロです。マイク入力を確認してね。':'鍵盤か「▶ 録音音を試聴」を押してね。'));
+ // Always convert recorder input to an actual 1-channel buffer. A left-only
+ // two-channel recording otherwise plays out of the left loudspeaker only.
+ const mono=ac.createBuffer(1,decoded.length,decoded.sampleRate);
+ const out=mono.getChannelData(0);
+ const channels=Array.from({length:decoded.numberOfChannels},(_,i)=>decoded.getChannelData(i));
+ // Choose active input channels once per buffer to avoid sample-by-sample balance changes.
+ const active=channels.filter(ch=>{
+  let energy=0;const step=Math.max(1,Math.floor(ch.length/30000));
+  for(let i=0;i<ch.length;i+=step)energy+=ch[i]*ch[i];
+  return energy>1e-8;
+ });
+ const selected=active.length?active:channels;
+ let peak=0,sumSq=0;
+ for(let i=0;i<out.length;i++){
+  let sum=0;
+  for(const ch of selected)sum+=ch[i];
+  out[i]=sum/selected.length;
+  const v=Math.abs(out[i]);if(v>peak)peak=v;sumSq+=out[i]*out[i];
+ }
+ const rms=Math.sqrt(sumSq/Math.max(1,out.length));
+ // Peak normalisation limited to 10x so silent/noisy recordings aren't overamplified.
+ const boost=peak>=0.0003?Math.min(10,0.9/peak):1;
+ if(boost!==1)for(let i=0;i<out.length;i++)out[i]*=boost;
+ buffer=mono;clock.textContent=mono.duration.toFixed(1)+' 秒';meter.style.width='100%';
+ msg('録音OK！ '+mono.duration.toFixed(1)+'秒 / モノラル→左右出力 / 補正 '+boost.toFixed(1)+'倍。'+(peak<.0003?'ただし録音レベルがほぼゼロです。':'鍵盤を弾いてみてね。'));
+
 }
 function stopRecording(){if(recorder&&recorder.state==='recording')recorder.stop()}
 async function startRecording(){
@@ -100,13 +131,13 @@ $('load').addEventListener('click',()=>$('file').click());
 $('file').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{await decode(f)}catch(err){msg('音声ファイルを読めません: '+err.message)}e.target.value=''});
 $('preview').addEventListener('click',()=>{
  try{if(!buffer){msg('先に録音してください。');return}
- const ac=audio(),src=ac.createBufferSource(),g=ac.createGain();src.buffer=buffer;g.gain.value=Number(volume.value)/100;src.connect(g).connect(ac.destination);src.start();msg('録音音の試聴中…音は聞こえる？');
+ const ac=audio(),src=ac.createBufferSource(),g=ac.createGain();src.buffer=buffer;g.gain.value=Number(volume.value)/100;src.connect(g).connect(master);src.start();msg('録音音の試聴中…音は聞こえる？');
  }catch(e){msg('試聴エラー: '+e.message)}
 });
 $('tone').addEventListener('click',()=>{
  try{const ac=audio(),osc=ac.createOscillator(),g=ac.createGain(),now=ac.currentTime;
  osc.frequency.value=440;osc.type='sine';g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(.2,now+.03);g.gain.setValueAtTime(.2,now+.7);g.gain.exponentialRampToValueAtTime(.0001,now+1);
- osc.connect(g).connect(ac.destination);osc.start(now);osc.stop(now+1.02);
+ osc.connect(g).connect(master);osc.start(now);osc.stop(now+1.02);
  msg('音声テスト中（440Hz、1秒）/ AudioContext: '+ac.state);
  }catch(e){msg('音声テストエラー: '+e.message)}
 });
