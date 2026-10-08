@@ -1,9 +1,114 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#14162b"><title>HANA POCKET SAMPLER</title><style>
-:root{color-scheme:dark;font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif}*{box-sizing:border-box}html,body{margin:0;background:#101322;color:#fff;min-height:100%;overscroll-behavior:none}body{display:flex;justify-content:center}main{width:min(100%,850px);padding:20px 16px 30px;user-select:none;-webkit-user-select:none}header{display:flex;align-items:center;justify-content:space-between;gap:12px}h1{font-size:clamp(22px,5.2vw,36px);letter-spacing:.03em;margin:0;font-weight:900}h1 span{color:#ffa74b} .tag{font-size:12px;color:#bdc3d7;margin:5px 0 0}.pill{background:#273151;padding:7px 10px;border-radius:30px;font-size:11px;color:#c5d2ff;white-space:nowrap}.panel{border:1px solid #313951;background:linear-gradient(140deg,#202744,#151a2e);border-radius:20px;padding:17px;margin-top:18px;box-shadow:0 12px 26px #0002}.control{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.btn{border:0;color:#fff;background:#374265;border-radius:14px;padding:13px 16px;font-size:16px;font-weight:800;touch-action:manipulation;cursor:pointer}.btn:disabled{opacity:.38}.primary{background:#f3536e}.primary.recording{background:#a71136;animation:pulse 1s infinite}.secondary{background:#44527b}.small{padding:9px 12px;font-size:13px}@keyframes pulse{50%{box-shadow:0 0 0 7px #f3536e33}}.status{margin:12px 0 0;min-height:30px;font-size:14px;color:#d6e0f7;line-height:1.5}.settings{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:13px}.settings label{display:flex;align-items:center;gap:8px;color:#cad3eb;font-size:13px}select,input[type=range]{accent-color:#f6ad51}select{color:white;background:#333e60;border:1px solid #586382;border-radius:9px;padding:7px;font-size:14px}.kbd-wrap{position:relative;margin-top:20px;padding:10px 8px 12px;border-radius:17px;background:#0b1020;border:1px solid #30374c;touch-action:none}.keys{display:flex;position:relative;height:clamp(190px,38vw,290px);gap:2px}.white{position:relative;flex:1;min-width:0;border:1px solid #c1c8d7;background:linear-gradient(#fff,#dce2ec);border-radius:0 0 9px 9px;color:#5d6474;display:flex;align-items:end;justify-content:center;padding-bottom:12px;font-size:12px;font-weight:800;touch-action:none}.white.active{background:linear-gradient(#ffd18b,#e8a24f)}.white.root{color:#b3474d}.black{position:absolute;width:calc(100% / 14 * .60);height:60%;top:0;z-index:2;transform:translateX(-50%);background:linear-gradient(#3a435a,#080a12 70%);border:1px solid #0a0e15;border-radius:0 0 6px 6px;box-shadow:1px 5px 5px #0007;touch-action:none}.black.active{background:linear-gradient(#ffb665,#b34f4c)}.hint{font-size:12px;color:#8996b4;margin:12px 0 0;line-height:1.65}.meter{height:5px;background:#303650;border-radius:7px;overflow:hidden;flex:1;min-width:75px}.meter>div{height:100%;width:0;background:#ffd078;transition:width .08s}.time{font-size:13px;color:#cbd2e6;font-variant-numeric:tabular-nums}.foot{color:#9ba7c3;text-align:center;font-size:12px;padding:22px 0}.file{display:none}.wave{font-size:12px;color:#ffa74b;font-weight:700} @media(max-width:480px){main{padding:15px 9px}.panel{padding:13px}.white{font-size:10px}.btn{padding:12px 13px;font-size:14px}.keys{height:225px}}
-</style></head><body><main><header><div><h1>HANA <span>POCKET</span><br>SAMPLER</h1><p class="tag">録って、弾くだけ。ポケットに入る音のおもちゃ。</p></div><div class="pill">WEB INSTRUMENT</div></header>
-<section class="panel"><div class="control"><button id="rec" class="btn primary">● 録音する</button><button id="stop" class="btn secondary" disabled>■ 録音終了</button><button id="load" class="btn small">音声ファイル</button><input id="file" class="file" type="file" accept="audio/*"><div class="meter"><div id="meter"></div></div><span id="time" class="time">0.0 秒</span></div><p id="status" class="status" aria-live="polite">まず音をひとつ録音してみよう。短い声や口笛がおすすめ。</p><div class="settings"><label>録音音の鍵盤 <select id="root"><option value="48">C3</option><option value="60" selected>C4</option><option value="72">C5</option><option value="69">A4</option></select></label><label>音量 <input id="volume" type="range" min="0" max="100" value="75"></label><label><input id="loop" type="checkbox"> ループ</label></div></section>
-<section class="kbd-wrap"><div id="keys" class="keys" aria-label="2オクターブ演奏鍵盤"></div></section><p class="hint">C3〜B4の2オクターブ。鍵盤を押している間だけ音が鳴ります。複数音にも対応。長い録音でも使えますが、短い単音がいちばん楽しい！</p><p class="hint">※ 録音音自体の音程は自動検出しません。「録音音の鍵盤」を選んで、そこを基準に移調します。録音は端末内で処理し、サーバーへ送りません。</p><footer class="foot">HANA instruments · Made for fun ♫</footer></main><script>
-(()=>{'use strict';let ctx,buffer=null,stream=null,recorder=null,chunks=[],tick=null,started=0,voices=new Map(),recordTimeout=null;const $=id=>document.getElementById(id),status=$('status'),rec=$('rec'),stop=$('stop'),meter=$('meter'),clock=$('time'),root=$('root'),loop=$('loop'),volume=$('volume'),keys=$('keys');const noteNames=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];const semis=[0,2,4,5,7,9,11];const msg=s=>status.textContent=s;const init=async()=>{ctx??=new(window.AudioContext||window.webkitAudioContext)();if(ctx.state!=='running')await ctx.resume();};const noteName=n=>noteNames[n%12]+(Math.floor(n/12)-1);const kb=[];for(let n=48;n<72;n++){if(semis.includes(n%12)){const b=document.createElement('div');b.className='white';b.dataset.note=n;b.textContent=noteName(n);keys.appendChild(b);kb.push({n,el:b});}}for(let n=48;n<72;n++){if(!semis.includes(n%12)){const b=document.createElement('div');b.className='black';b.dataset.note=n;const prior=kb.filter(x=>x.n<n).length;b.style.left=`calc(${prior} * 100% / 14 - 1px)`;keys.appendChild(b);kb.push({n,el:b});}}const updateRoot=()=>{kb.forEach(x=>x.el.classList.toggle('root',x.n===+root.value));};root.onchange=updateRoot;updateRoot();let animationId=0;function release(v){if(!v)return;const now=ctx.currentTime;try{v.gain.gain.cancelScheduledValues(now);v.gain.gain.setTargetAtTime(0,now,.022);v.source.stop(now+.12);}catch(_){}}function stopVoice(id){const v=voices.get(id);if(!v)return;release(v);voices.delete(id);if(![...voices.values()].some(t=>t.n===v.n))keys.querySelector(`[data-note="${v.n}"]`)?.classList.remove('active');}async function play(id,n){if(!buffer)return msg('先に録音するか、音声ファイルを読み込んでね。');await init();stopVoice(id);const source=ctx.createBufferSource(),gain=ctx.createGain(),now=ctx.currentTime;source.buffer=buffer;source.playbackRate.value=Math.pow(2,(n-(+root.value))/12);source.loop=loop.checked;if(source.loop){source.loopStart=0;source.loopEnd=buffer.duration;}gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime((+volume.value/100)*.75,now+.012);source.connect(gain).connect(ctx.destination);source.start();const voice={source,gain,n};voices.set(id,voice);keys.querySelector(`[data-note="${n}"]`)?.classList.add('active');source.onended=()=>{if(voices.get(id)===voice){voices.delete(id);keys.querySelector(`[data-note="${n}"]`)?.classList.remove('active');}};}
-keys.addEventListener('pointerdown',e=>{const k=e.target.closest('[data-note]');if(!k)return;e.preventDefault();k.setPointerCapture(e.pointerId);play(e.pointerId,+k.dataset.note).catch(err=>msg('再生できません: '+err.message));});keys.addEventListener('pointerup',e=>stopVoice(e.pointerId));keys.addEventListener('pointercancel',e=>stopVoice(e.pointerId));keys.addEventListener('lostpointercapture',e=>stopVoice(e.pointerId));window.addEventListener('blur',()=>{for(const id of [...voices.keys()])stopVoice(id);});async function decode(blob){await init();const data=await blob.arrayBuffer();buffer=await ctx.decodeAudioData(data);if(!buffer.duration)throw Error('音声が空です');msg(`録音OK！ ${buffer.duration.toFixed(1)}秒。さあ鍵盤を弾いてみよう 🎹`);clock.textContent=buffer.duration.toFixed(1)+' 秒';meter.style.width='100%';}
-async function startRec(){try{if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw Error('このブラウザはマイク録音に対応していません。HTTPSのURLをSafariで開いてください。');await init();for(const id of [...voices.keys()])stopVoice(id);stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});chunks=[];const types=['audio/mp4','audio/webm;codecs=opus','audio/webm'];const mime=types.find(t=>MediaRecorder.isTypeSupported(t));recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};recorder.onerror=e=>msg('録音エラー: '+(e.error?.message||'不明'));recorder.onstop=async()=>{clearInterval(tick);clearTimeout(recordTimeout);stream?.getTracks().forEach(t=>t.stop());stream=null;rec.disabled=false;rec.classList.remove('recording');stop.disabled=true;try{if(!chunks.length)throw Error('データがありません');await decode(new Blob(chunks,{type:recorder.mimeType||'audio/mp4'}));}catch(e){msg('録音の読み込みに失敗: '+e.message);}};recorder.start();started=Date.now();rec.disabled=true;rec.classList.add('recording');stop.disabled=false;msg('録音中… 音を入れて「録音終了」を押してね（最長10秒）。');tick=setInterval(()=>{const t=(Date.now()-started)/1000;clock.textContent=t.toFixed(1)+' 秒';meter.style.width=(t/10*100)+'%';},100);recordTimeout=setTimeout(stopRec,10000);}catch(e){stream?.getTracks().forEach(t=>t.stop());stream=null;msg('マイクが使えません: '+e.message+'（Safariのマイク許可を確認）');}}function stopRec(){if(recorder?.state==='recording')recorder.stop();}rec.onclick=startRec;stop.onclick=stopRec;$('load').onclick=()=>$('file').click();$('file').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{await decode(f);}catch(err){msg('読み込めません: '+err.message);}e.target.value='';};document.addEventListener('visibilitychange',()=>{if(document.hidden)for(const id of [...voices.keys()])stopVoice(id);});})();
-</script></body></html>
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#14162b"><title>HANA POCKET SAMPLER</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;background:#101322;color:white;overscroll-behavior:none}body{display:flex;justify-content:center}main{width:min(100%,900px);padding:20px 15px 30px;user-select:none;-webkit-user-select:none}header{display:flex;justify-content:space-between;align-items:center;gap:10px}h1{font-size:clamp(24px,5vw,36px);line-height:1.1;margin:0;font-weight:900}h1 span{color:#ffa74b}.tag,.hint{color:#aab5d0;font-size:12px;line-height:1.6}.pill{background:#273151;border-radius:25px;padding:8px 12px;color:#bfcafa;font-size:11px;white-space:nowrap}.panel{border:1px solid #313951;background:linear-gradient(140deg,#202744,#151a2e);border-radius:18px;padding:16px;margin-top:18px}.controls,.settings{display:flex;flex-wrap:wrap;align-items:center;gap:9px}.settings{margin-top:14px;gap:16px}.settings label{display:flex;align-items:center;gap:7px;font-size:13px;color:#cad3eb}.btn{border:0;border-radius:12px;padding:11px 14px;background:#3b486b;color:white;font-size:14px;font-weight:800;touch-action:manipulation;cursor:pointer}.btn:disabled{opacity:.4}.primary{background:#f3536e}.recording{background:#aa153c}.status{min-height:32px;margin:10px 0 0;color:#e3e9ff;font-size:14px;line-height:1.5}.meter{flex:1;min-width:65px;height:5px;background:#39405c;border-radius:5px;overflow:hidden}.meter>div{height:100%;width:0;background:#ffd078}.time{font-size:13px;color:#cbd2e6}select{background:#354061;color:white;padding:7px;border:1px solid #56617c;border-radius:8px}input[type=range]{accent-color:#ffa74b}.file{display:none}.keyboard-shell{margin-top:20px;background:#0b1020;padding:10px 8px 12px;border:1px solid #343d57;border-radius:16px;touch-action:none;overflow:hidden}.keys{height:clamp(185px,31vw,285px);display:flex;position:relative;touch-action:none}.white{height:100%;position:relative;flex:1;min-width:0;border:1px solid #9ca9b9;border-radius:0 0 7px 7px;background:linear-gradient(#fff,#dfe5ee);color:#656e80;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;font-size:clamp(9px,1.3vw,12px);font-weight:800;touch-action:none}.white.active{background:linear-gradient(#ffdca7,#eca755)}.white.root{color:#c44a50}.black{position:absolute;top:0;width:calc(100% / 14 * .57);height:60%;transform:translateX(-50%);z-index:2;background:linear-gradient(#414b64,#080a12 75%);border:1px solid #090b13;border-radius:0 0 6px 6px;box-shadow:1px 4px 5px #0008;touch-action:none}.black.active{background:linear-gradient(#f7bc74,#b14d49)}.diagnostics{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}.diagnostics .btn{background:#303a5c;font-size:12px;padding:9px 11px}.footer{text-align:center;color:#8792ac;font-size:12px;margin-top:25px}@media(max-width:520px){main{padding:14px 8px}.panel{padding:11px}.btn{padding:10px 10px}.keys{height:210px}}
+</style></head><body><main>
+<header><div><h1>HANA <span>POCKET</span><br>SAMPLER</h1><p class="tag">録って、弾くだけ。ポケットに入る音のおもちゃ。</p></div><div class="pill">WEB INSTRUMENT</div></header>
+<section class="panel"><div class="controls"><button id="rec" class="btn primary">● 録音する</button><button id="stop" class="btn" disabled>■ 録音終了</button><button id="load" class="btn">音声ファイル</button><input class="file" id="file" type="file" accept="audio/*"><div class="meter"><div id="meter"></div></div><span id="time" class="time">0.0 秒</span></div>
+<p id="status" class="status" aria-live="polite">まず音を録音してみよう。短い声や口笛がおすすめ。</p>
+<div class="settings"><label>録音音の鍵盤 <select id="root"><option value="48">C3</option><option value="60" selected>C4</option><option value="69">A4</option><option value="72">C5</option></select></label><label>音量 <input id="volume" type="range" min="0" max="100" value="80"></label><label><input id="loop" type="checkbox">ループ</label></div>
+<div class="diagnostics"><button id="preview" class="btn">▶ 録音音を試聴</button><button id="tone" class="btn">♪ 音声テスト</button></div></section>
+<section class="keyboard-shell"><div id="keys" class="keys" aria-label="C3からB4の2オクターブ鍵盤"></div></section>
+<p class="hint">白鍵14・黒鍵10の2オクターブ。指を離すと音が止まります。複数音同時演奏に対応。※音程は自動検出しません。元の音に対応する鍵盤を選んでください。</p><p class="hint">音が出ない場合は「♪ 音声テスト」→「▶ 録音音を試聴」の順で確認してください。録音データは端末内で処理されます。</p><footer class="footer">HANA instruments · Made for fun ♫　· 修正版 2.0</footer>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id), keys=$('keys'), root=$('root'), volume=$('volume'), loop=$('loop');
+const status=$('status'), rec=$('rec'), stop=$('stop'), meter=$('meter'), clock=$('time');
+const msg=s=>{status.textContent=s};
+let ctx=null, buffer=null, recorder=null, stream=null, chunks=[], timer=null, timeout=null, began=0;
+const voices=new Map(), pointers=new Map(), noteElements=new Map();
+const noteNames=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const whiteOffsets=[0,2,4,5,7,9,11];
+const isWhite=n=>whiteOffsets.includes(n%12);
+function audio(){
+ if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+ if(ctx.state!=='running')ctx.resume().catch(e=>msg('音声を開始できません: '+e.message));
+ return ctx;
+}
+function label(n){return noteNames[n%12]+(Math.floor(n/12)-1)}
+// 白鍵を14個配置し、黒鍵を「直前の白鍵との境界」に配置する。
+for(let n=48;n<72;n++)if(isWhite(n)){
+ const el=document.createElement('div');el.className='white';el.dataset.note=n;el.textContent=label(n);keys.appendChild(el);noteElements.set(n,el);
+}
+for(let n=48;n<72;n++)if(!isWhite(n)){
+ const previousWhites=Array.from({length:n-48},(_,i)=>48+i).filter(isWhite).length;
+ const el=document.createElement('div');el.className='black';el.dataset.note=n;
+ el.style.left=(previousWhites/14*100)+'%';keys.appendChild(el);noteElements.set(n,el);
+}
+function updateRoot(){for(const [n,el] of noteElements)el.classList.toggle('root',n===Number(root.value))}root.addEventListener('change',updateRoot);updateRoot();
+function highlight(n){noteElements.get(n)?.classList.toggle('active',[...voices.values()].some(v=>v.n===n))}
+function endVoice(id){const v=voices.get(id);if(!v)return;voices.delete(id);const now=v.context.currentTime;try{v.gain.gain.cancelScheduledValues(now);v.gain.gain.setValueAtTime(v.gain.gain.value,now);v.gain.gain.linearRampToValueAtTime(.0001,now+.04);v.src.stop(now+.05)}catch(e){}highlight(v.n)}
+// 重要: 再生開始まで await を挟まない。指を離すイベントとの競合を防ぐ。
+function play(id,n){
+ if(!buffer){msg('先に録音するか音声ファイルを読み込んでね。');return}
+ const ac=audio();endVoice(id);
+ const src=ac.createBufferSource(), gain=ac.createGain(), now=ac.currentTime;
+ src.buffer=buffer;src.playbackRate.value=Math.pow(2,(n-Number(root.value))/12);
+ src.loop=loop.checked;
+ gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(Math.max(.0001,Number(volume.value)/100*.9),now+.01);
+ src.connect(gain);gain.connect(ac.destination);
+ const voice={src,gain,n,context:ac};voices.set(id,voice);highlight(n);
+ src.onended=()=>{if(voices.get(id)===voice){voices.delete(id);highlight(n)}};
+ src.start(now);
+}
+keys.addEventListener('pointerdown',e=>{
+ const el=e.target.closest('[data-note]');if(!el)return;
+ e.preventDefault();const n=Number(el.dataset.note),id=e.pointerId;
+ pointers.set(id,n);try{keys.setPointerCapture(id)}catch(_){ }
+ try{play(id,n)}catch(err){msg('鍵盤の再生エラー: '+err.message)}
+});
+function pointerEnd(e){pointers.delete(e.pointerId);endVoice(e.pointerId)}
+keys.addEventListener('pointerup',pointerEnd);keys.addEventListener('pointercancel',pointerEnd);
+keys.addEventListener('lostpointercapture',pointerEnd);
+window.addEventListener('blur',()=>{for(const id of [...voices.keys()])endVoice(id)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)for(const id of [...voices.keys()])endVoice(id)});
+async function decode(blob){
+ const ac=audio(), bytes=await blob.arrayBuffer();
+ const decoded=await ac.decodeAudioData(bytes);
+ if(!decoded.duration)throw Error('音声データが空です');
+ buffer=decoded;clock.textContent=decoded.duration.toFixed(1)+' 秒';meter.style.width='100%';
+ // 波形がすべて無音の場合も判別しておく
+ const a=decoded.getChannelData(0);let peak=0;
+ for(let i=0;i<a.length;i+=Math.max(1,Math.floor(a.length/50000)))peak=Math.max(peak,Math.abs(a[i]));
+ msg('録音OK！ '+decoded.duration.toFixed(1)+'秒。'+(peak<.0003?'ただし音量がほぼゼロです。マイク入力を確認してね。':'鍵盤か「▶ 録音音を試聴」を押してね。'));
+}
+function stopRecording(){if(recorder&&recorder.state==='recording')recorder.stop()}
+async function startRecording(){
+ try{
+  audio();
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw Error('マイク録音に対応していません。HTTPSで開いてください');
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  const choices=['audio/mp4','audio/webm;codecs=opus','audio/webm'];
+  const mime=choices.find(t=>MediaRecorder.isTypeSupported(t));
+  recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);chunks=[];
+  recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  recorder.onerror=e=>msg('録音エラー: '+(e.error?.message||'不明'));
+  recorder.onstop=async()=>{
+    clearInterval(timer);clearTimeout(timeout);stream?.getTracks().forEach(t=>t.stop());stream=null;
+    rec.disabled=false;stop.disabled=true;rec.classList.remove('recording');
+    try{if(!chunks.length)throw Error('録音データがありません');await decode(new Blob(chunks,{type:recorder.mimeType||'audio/mp4'}))}
+    catch(err){msg('録音の読み込みに失敗: '+err.message)}
+  };
+  recorder.start();began=Date.now();rec.disabled=true;stop.disabled=false;rec.classList.add('recording');
+  msg('録音中…最長10秒。「録音終了」で確定します。');
+  timer=setInterval(()=>{const seconds=(Date.now()-began)/1000;clock.textContent=seconds.toFixed(1)+' 秒';meter.style.width=Math.min(100,seconds*10)+'%'},100);
+  timeout=setTimeout(stopRecording,10000);
+ }catch(err){stream?.getTracks().forEach(t=>t.stop());stream=null;msg('マイクエラー: '+err.message)}
+}
+rec.addEventListener('click',startRecording);stop.addEventListener('click',stopRecording);
+$('load').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{await decode(f)}catch(err){msg('音声ファイルを読めません: '+err.message)}e.target.value=''});
+$('preview').addEventListener('click',()=>{
+ try{if(!buffer){msg('先に録音してください。');return}
+ const ac=audio(),src=ac.createBufferSource(),g=ac.createGain();src.buffer=buffer;g.gain.value=Number(volume.value)/100;src.connect(g).connect(ac.destination);src.start();msg('録音音の試聴中…音は聞こえる？');
+ }catch(e){msg('試聴エラー: '+e.message)}
+});
+$('tone').addEventListener('click',()=>{
+ try{const ac=audio(),osc=ac.createOscillator(),g=ac.createGain(),now=ac.currentTime;
+ osc.frequency.value=440;osc.type='sine';g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(.2,now+.03);g.gain.setValueAtTime(.2,now+.7);g.gain.exponentialRampToValueAtTime(.0001,now+1);
+ osc.connect(g).connect(ac.destination);osc.start(now);osc.stop(now+1.02);
+ msg('音声テスト中（440Hz、1秒）/ AudioContext: '+ac.state);
+ }catch(e){msg('音声テストエラー: '+e.message)}
+});
+})();
+</script></main></body></html>
